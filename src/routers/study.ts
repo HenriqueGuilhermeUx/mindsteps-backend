@@ -1,4 +1,9 @@
-import { Router } from 'express'
+import { Router, Request } from 'express'
+
+// Extend Express Request to include userId from auth middleware
+interface AuthenticatedRequest extends Request {
+  userId: string
+}
 import {
   getProfileByUserId,
   updateProfile,
@@ -19,7 +24,7 @@ const router = Router()
 router.use(authMiddleware)
 
 // Get user profile
-router.get('/profile', async (req, res) => {
+router.get('/profile', async (req: AuthenticatedRequest, res) => {
   try {
     const profile = await getProfileByUserId(req.userId)
     if (!profile) {
@@ -33,10 +38,10 @@ router.get('/profile', async (req, res) => {
 })
 
 // Update profile
-router.post('/profile/update', async (req, res) => {
+router.post('/profile/update', async (req: AuthenticatedRequest, res) => {
   try {
     const { name, tutorId, petType, petName } = req.body
-    const updates: any = {}
+    const updates: Record<string, any> = {}
     if (name) updates.name = name
     if (tutorId) updates.tutor_id = tutorId
     if (petType) updates.pet_type = petType
@@ -51,7 +56,7 @@ router.post('/profile/update', async (req, res) => {
 })
 
 // Start a new study session
-router.post('/study/startSession', async (req, res) => {
+router.post('/study/startSession', async (req: AuthenticatedRequest, res) => {
   try {
     const { tutorId } = req.body
     const profile = await getProfileByUserId(req.userId)
@@ -69,7 +74,7 @@ router.post('/study/startSession', async (req, res) => {
 })
 
 // Send a message and get AI response
-router.post('/study/sendMessage', async (req, res) => {
+router.post('/study/sendMessage', async (req: AuthenticatedRequest, res) => {
   try {
     const { sessionId, content, subject } = req.body
 
@@ -173,7 +178,7 @@ router.post('/study/endSession', async (req, res) => {
 })
 
 // Check usage
-router.get('/usage/check', async (req, res) => {
+router.get('/usage/check', async (req: AuthenticatedRequest, res) => {
   try {
     const todayUsage = await getTodayUsage(req.userId)
     const messageCount = todayUsage?.message_count || 0
@@ -190,7 +195,7 @@ router.get('/usage/check', async (req, res) => {
 })
 
 // Claim daily bonus
-router.post('/profile/claimDaily', async (req, res) => {
+router.post('/profile/claimDaily', async (req: AuthenticatedRequest, res) => {
   try {
     const profile = await getProfileByUserId(req.userId)
     if (!profile) {
