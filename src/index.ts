@@ -21,8 +21,8 @@ const corsOptions = {
     const allowedOrigins = [
       'http://localhost:5173',
       'http://localhost:3000',
-      'https://ss0l2a4bd1un.space.minimax.io', // current deploy preview
-      // Add your Netlify URL here when you deploy
+      'https://ss0l2a4bd1un.space.minimax.io',
+      'https://mind-steps.netlify.app', // Netlify production site
     ]
 
     if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
