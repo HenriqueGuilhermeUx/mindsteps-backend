@@ -11,8 +11,32 @@ import studyRouter from './routers/study.js'
 const app = express()
 const PORT = process.env.PORT || 3001
 
-// Middleware
-app.use(cors())
+// CORS configuration - allow Netlify and other frontend domains
+const corsOptions = {
+  origin: function (origin: any, callback: any) {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true)
+
+    // List of allowed origins
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'https://ss0l2a4bd1un.space.minimax.io', // current deploy preview
+      // Add your Netlify URL here when you deploy
+    ]
+
+    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}
+
+app.use(cors(corsOptions))
 app.use(express.json())
 
 // Health check
