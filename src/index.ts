@@ -64,6 +64,15 @@ app.get('/debug/db', async (req, res) => {
   }
 })
 
+// Test endpoint for register (GET - returns info, not actual registration)
+app.get('/api/auth/register', (req, res) => {
+  res.json({
+    message: 'Register endpoint ready',
+    method: 'POST required',
+    example: { email: 'test@example.com', password: '123456', name: 'Test' }
+  })
+})
+
 // Routes
 app.use('/api/auth', authRouter)
 app.use('/api', studyRouter)
