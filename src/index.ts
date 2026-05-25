@@ -5,6 +5,9 @@ import dotenv from 'dotenv'
 // Load environment variables
 dotenv.config()
 
+// Import Supabase
+import { supabase } from './db/index.js'
+
 import authRouter from './routers/auth.js'
 import studyRouter from './routers/study.js'
 
