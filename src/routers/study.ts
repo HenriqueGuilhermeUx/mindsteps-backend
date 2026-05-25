@@ -1,9 +1,4 @@
-import { Router, Request } from 'express'
-
-// Extend Express Request to include userId from auth middleware
-interface AuthenticatedRequest extends Request {
-  userId: string
-}
+import { Router } from 'express'
 import {
   getProfileByUserId,
   updateProfile,
@@ -24,9 +19,10 @@ const router = Router()
 router.use(authMiddleware)
 
 // Get user profile
-router.get('/profile', async (req: AuthenticatedRequest, res) => {
+router.get('/profile', async (req, res) => {
   try {
-    const profile = await getProfileByUserId(req.userId)
+    const userId = (req as any).userId
+    const profile = await getProfileByUserId(userId)
     if (!profile) {
       return res.status(404).json({ message: 'Perfil não encontrado' })
     }
@@ -38,8 +34,9 @@ router.get('/profile', async (req: AuthenticatedRequest, res) => {
 })
 
 // Update profile
-router.post('/profile/update', async (req: AuthenticatedRequest, res) => {
+router.post('/profile/update', async (req, res) => {
   try {
+    const userId = (req as any).userId
     const { name, tutorId, petType, petName } = req.body
     const updates: Record<string, any> = {}
     if (name) updates.name = name
@@ -47,7 +44,7 @@ router.post('/profile/update', async (req: AuthenticatedRequest, res) => {
     if (petType) updates.pet_type = petType
     if (petName) updates.pet_name = petName
 
-    const profile = await updateProfile(req.userId, updates)
+    const profile = await updateProfile(userId, updates)
     res.json(profile)
   } catch (error) {
     console.error('Update profile error:', error)
@@ -56,10 +53,11 @@ router.post('/profile/update', async (req: AuthenticatedRequest, res) => {
 })
 
 // Start a new study session
-router.post('/study/startSession', async (req: AuthenticatedRequest, res) => {
+router.post('/study/startSession', async (req, res) => {
   try {
+    const userId = (req as any).userId
     const { tutorId } = req.body
-    const profile = await getProfileByUserId(req.userId)
+    const profile = await getProfileByUserId(userId)
 
     if (!profile) {
       return res.status(404).json({ message: 'Perfil não encontrado' })
@@ -74,8 +72,9 @@ router.post('/study/startSession', async (req: AuthenticatedRequest, res) => {
 })
 
 // Send a message and get AI response
-router.post('/study/sendMessage', async (req: AuthenticatedRequest, res) => {
+router.post('/study/sendMessage', async (req, res) => {
   try {
+    const userId = (req as any).userId
     const { sessionId, content, subject } = req.body
 
     if (!sessionId || !content) {
@@ -83,7 +82,7 @@ router.post('/study/sendMessage', async (req: AuthenticatedRequest, res) => {
     }
 
     // Check rate limit (5 messages per day for free tier)
-    const todayUsage = await getTodayUsage(req.userId)
+    const todayUsage = await getTodayUsage(userId)
     if (todayUsage && todayUsage.message_count >= 5) {
       return res.status(429).json({
         message: 'Limite diário atingido. Volte amanhã para mais aprendizado! 🌟',
@@ -91,7 +90,7 @@ router.post('/study/sendMessage', async (req: AuthenticatedRequest, res) => {
     }
 
     // Get profile for context
-    const profile = await getProfileByUserId(req.userId)
+    const profile = await getProfileByUserId(userId)
     if (!profile) {
       return res.status(404).json({ message: 'Perfil não encontrado' })
     }
@@ -126,11 +125,11 @@ router.post('/study/sendMessage', async (req: AuthenticatedRequest, res) => {
     await saveMessage(sessionId, 'assistant', response)
 
     // Increment usage
-    await incrementUsage(req.userId)
+    await incrementUsage(userId)
 
     // Add XP
     const xpEarned = 10
-    await addXP(req.userId, xpEarned)
+    await addXP(userId, xpEarned)
 
     // Calculate cognitive level
     const cognitiveLevel = calculateCognitiveLevel(conversationHistory)
@@ -178,9 +177,10 @@ router.post('/study/endSession', async (req, res) => {
 })
 
 // Check usage
-router.get('/usage/check', async (req: AuthenticatedRequest, res) => {
+router.get('/usage/check', async (req, res) => {
   try {
-    const todayUsage = await getTodayUsage(req.userId)
+    const userId = (req as any).userId
+    const todayUsage = await getTodayUsage(userId)
     const messageCount = todayUsage?.message_count || 0
     const limit = 5
 
@@ -195,16 +195,17 @@ router.get('/usage/check', async (req: AuthenticatedRequest, res) => {
 })
 
 // Claim daily bonus
-router.post('/profile/claimDaily', async (req: AuthenticatedRequest, res) => {
+router.post('/profile/claimDaily', async (req, res) => {
   try {
-    const profile = await getProfileByUserId(req.userId)
+    const userId = (req as any).userId
+    const profile = await getProfileByUserId(userId)
     if (!profile) {
       return res.status(404).json({ message: 'Perfil não encontrado' })
     }
 
     // Add streak bonus
     const bonus = profile.streak * 10
-    await addXP(req.userId, bonus)
+    await addXP(userId, bonus)
 
     res.json({
       streak: profile.streak,
