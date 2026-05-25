@@ -161,3 +161,47 @@ export function calculateCognitiveLevel(messages: ChatMessage[]): number {
 
   return Math.max(1, Math.min(10, level))
 }
+
+// Generate hint for student (without giving the answer away)
+export async function generateHint(
+  lastQuestion: string,
+  tutorId: string,
+  ageGroup: string,
+  studentName: string
+): Promise<string> {
+  const persona = TUTOR_PERSONAS[tutorId] || TUTOR_PERSONAS.default
+  const ageGuidance = getAgeGuidance(ageGroup)
+
+  const hintPrompt = `${persona}
+
+${ageGuidance}
+
+Você é o tutor de ${studentName} e ele está travado em uma questão. Gere uma DICA que:
+1. Dirija o pensamento SEM revelar a resposta
+2. Use linguagem acolhedora e encorajadora
+3. Conecte com interesses do aluno (se mencionado)
+4. Seja curta e objetiva (1-2 frases)
+5. Faça uma pergunta guia ou dê um exemplo do cotidiano
+
+QUESTÃO ORIGINAL: "${lastQuestion}"
+
+Responda APENAS com a dica, sem explicar nada mais.`
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: hintPrompt },
+        { role: 'user', content: `Dê uma dica para o aluno pensar sobre isso.` }
+      ],
+      temperature: 0.7,
+      max_tokens: 150,
+    })
+
+    const content = response.choices[0]?.message?.content
+    return content || 'Pense sobre um exemplo do seu dia a dia...'
+  } catch (error) {
+    console.error('Hint generation error:', error)
+    return 'Que tal pensar em um exemplo da vida real?'
+  }
+}

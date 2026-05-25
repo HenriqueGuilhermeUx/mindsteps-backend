@@ -81,13 +81,8 @@ router.post('/study/sendMessage', async (req, res) => {
       return res.status(400).json({ message: 'Mensagem inválida' })
     }
 
-    // Check rate limit (5 messages per day for free tier)
-    const todayUsage = await getTodayUsage(userId)
-    if (todayUsage && todayUsage.message_count >= 5) {
-      return res.status(429).json({
-        message: 'Limite diário atingido. Volte amanhã para mais aprendizado! 🌟',
-      })
-    }
+    // NO RATE LIMIT - messages are free for users
+    // Limit removed by user decision
 
     // Get profile for context
     const profile = await getProfileByUserId(userId)
@@ -124,7 +119,7 @@ router.post('/study/sendMessage', async (req, res) => {
     // Save AI response
     await saveMessage(sessionId, 'assistant', response)
 
-    // Increment usage
+    // Track usage for analytics (no limit)
     await incrementUsage(userId)
 
     // Add XP
@@ -164,6 +159,52 @@ router.get('/study/history/:sessionId', async (req, res) => {
   }
 })
 
+// Generate hint for current question
+router.post('/study/hint', async (req, res) => {
+  try {
+    const userId = (req as any).userId
+    const { sessionId } = req.body
+
+    if (!sessionId) {
+      return res.status(400).json({ message: 'Session ID required' })
+    }
+
+    // Get profile for context
+    const profile = await getProfileByUserId(userId)
+    if (!profile) {
+      return res.status(404).json({ message: 'Perfil não encontrado' })
+    }
+
+    // Get conversation history
+    const history = await getSessionMessages(sessionId)
+    const conversationHistory = history.map(m => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }))
+
+    // Get last assistant message (the question)
+    const lastAssistantMsg = [...conversationHistory].reverse().find(m => m.role === 'assistant')
+
+    if (!lastAssistantMsg) {
+      return res.json({ hint: 'Continue conversando com seu tutor!' })
+    }
+
+    // Generate hint using AI
+    const { generateHint } = await import('../services/ai.js')
+    const hint = await generateHint(
+      lastAssistantMsg.content,
+      profile.tutor_id,
+      profile.age_group,
+      profile.name
+    )
+
+    res.json({ hint })
+  } catch (error) {
+    console.error('Hint error:', error)
+    res.json({ hint: 'Que tal começar respondendo o que você acha? Não precisa ter medo de errar!' })
+  }
+})
+
 // End session
 router.post('/study/endSession', async (req, res) => {
   try {
@@ -176,21 +217,12 @@ router.post('/study/endSession', async (req, res) => {
   }
 })
 
-// Check usage
+// Check usage - NO LIMIT (messages are free)
 router.get('/usage/check', async (req, res) => {
   try {
-    const userId = (req as any).userId
-    const todayUsage = await getTodayUsage(userId)
-    const messageCount = todayUsage?.message_count || 0
-    const limit = 5
-
-    res.json({
-      remaining: Math.max(0, limit - messageCount),
-      limit,
-    })
+    res.json({ remaining: 9999, limit: 9999 })
   } catch (error) {
-    console.error('Check usage error:', error)
-    res.json({ remaining: 5, limit: 5 })
+    res.json({ remaining: 9999, limit: 9999 })
   }
 })
 
