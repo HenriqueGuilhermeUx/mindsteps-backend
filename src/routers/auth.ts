@@ -42,15 +42,19 @@ router.post('/register', async (req, res) => {
     const passwordHash = await bcrypt.hash(body.password, 10)
 
     // Create user
+    console.log('Creating user with email:', body.email)
     const user = await createUser(body.email, passwordHash)
+    console.log('User created:', user.id)
 
     // Create profile
+    console.log('Creating profile for user:', user.id)
     const profile = await createProfile(
       user.id,
       body.name,
       body.age || '11-14',
       body.grade || '6'
     )
+    console.log('Profile created:', profile.id)
 
     // Generate JWT
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' })
@@ -61,11 +65,12 @@ router.post('/register', async (req, res) => {
       profile,
     })
   } catch (error) {
+    console.error('Register error details:', error)
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: error.errors[0].message })
     }
-    console.error('Register error:', error)
-    res.status(500).json({ message: 'Erro ao criar conta' })
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+    res.status(500).json({ message: `Erro ao criar conta: ${errorMessage}` })
   }
 })
 
