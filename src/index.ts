@@ -2,88 +2,66 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 
-// Load environment variables
 dotenv.config()
 
-// Import Supabase
 import { supabase } from './db/index.js'
-
 import authRouter from './routers/auth.js'
 import studyRouter from './routers/study.js'
+import operationsRouter from './routers/operations.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
 
-// CORS configuration - allow all frontend domains
 const corsOptions = {
-  origin: function (origin: any, callback: any) {
-    // Allow all origins for now (can be restricted later for security)
+  origin: function (_origin: any, callback: any) {
     callback(null, true)
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }
 
 app.use(cors(corsOptions))
-app.use(express.json())
+app.use(express.json({ limit: '1mb' }))
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', service: 'MindSteps API', version: '1.1.0', timestamp: new Date().toISOString() })
 })
 
-// Debug endpoint - test database connection
-app.get('/debug/db', async (req, res) => {
+app.get('/debug/db', async (_req, res) => {
   try {
-    console.log('Testing database connection...')
-    console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? 'SET' : 'NOT SET')
-    console.log('SUPABASE_SERVICE_KEY:', process.env.SUPABASE_SERVICE_KEY ? 'SET' : 'NOT SET')
-    console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'SET' : 'NOT SET')
-
     const { data, error } = await supabase.from('users').select('count').limit(1)
-
     if (error) {
-      console.error('Database error:', error)
-      return res.status(500).json({
-        success: false,
-        error: error.message,
-        details: error.details,
-        hint: error.hint
-      })
+      return res.status(500).json({ success: false, error: error.message, details: error.details, hint: error.hint })
     }
-
     res.json({ success: true, message: 'Database connected!', data })
   } catch (err: any) {
-    console.error('Connection error:', err)
-    res.status(500).json({
-      success: false,
-      error: err.message,
-      stack: err.stack
-    })
+    res.status(500).json({ success: false, error: err.message })
   }
 })
 
-// Test endpoint for register (GET - returns info, not actual registration)
-app.get('/api/auth/register', (req, res) => {
+app.get('/api/auth/register', (_req, res) => {
   res.json({
     message: 'Register endpoint ready',
     method: 'POST required',
-    example: { email: 'test@example.com', password: '123456', name: 'Test' }
+    example: { email: 'test@example.com', password: '123456', name: 'Test' },
   })
 })
 
-// Routes
 app.use('/api/auth', authRouter)
 app.use('/api', studyRouter)
+app.use('/api/operations', operationsRouter)
 
-// Error handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((_req, res) => {
+  res.status(404).json({ message: 'Rota não encontrada' })
+})
+
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Server error:', err)
   res.status(500).json({ message: 'Erro interno do servidor' })
 })
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`)
-  console.log(`📚 MindSteps API ready!`)
+  console.log('📚 MindSteps API ready!')
 })
