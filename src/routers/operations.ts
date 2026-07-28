@@ -9,6 +9,20 @@ router.use(authMiddleware)
 
 const audienceSchema = z.enum(['independente','aluno','familia','professor','coordenacao','direcao','rede'])
 
+const learningProfileSchema = z.object({
+  primaryGoal: z.string().min(2),
+  subjects: z.array(z.string()).min(1).max(6),
+  learningFormats: z.array(z.string()).min(1).max(6),
+  helpPreferences: z.array(z.string()).max(6).default([]),
+  challenges: z.array(z.string()).max(6).default([]),
+  interests: z.array(z.string()).max(12).default([]),
+  dailyMinutes: z.number().int().min(5).max(240),
+  preferredDays: z.array(z.number().int().min(0).max(6)).max(7).default([]),
+  tutorPersona: z.string().min(2).default('lumi'),
+  currentIntention: z.string().optional(),
+  onboardingCompleted: z.boolean().default(true),
+})
+
 router.get('/me/role', async (req: any, res) => {
   const { data, error } = await supabase.from('user_roles').select('*').eq('user_id', req.userId).maybeSingle()
   if (error) return res.status(500).json({ message: error.message })
@@ -28,6 +42,131 @@ router.put('/me/role', async (req: any, res) => {
     res.json(data)
   } catch (error: any) {
     res.status(400).json({ message: error.message || 'Dados inválidos' })
+  }
+})
+
+router.get('/me/learning-profile', async (req: any, res) => {
+  const { data, error } = await supabase
+    .from('student_learning_profiles')
+    .select('*')
+    .eq('user_id', req.userId)
+    .maybeSingle()
+
+  if (error) return res.status(500).json({ message: error.message })
+  res.json({ profile: data })
+})
+
+router.put('/me/learning-profile', async (req: any, res) => {
+  try {
+    const body = learningProfileSchema.parse(req.body)
+    const now = new Date().toISOString()
+
+    const { data: learningProfile, error: profileError } = await supabase
+      .from('student_learning_profiles')
+      .upsert({
+        user_id: req.userId,
+        primary_goal: body.primaryGoal,
+        subjects: body.subjects,
+        learning_formats: body.learningFormats,
+        help_preferences: body.helpPreferences,
+        challenges: body.challenges,
+        interests: body.interests,
+        daily_minutes: body.dailyMinutes,
+        preferred_days: body.preferredDays,
+        tutor_persona: body.tutorPersona,
+        current_intention: body.currentIntention || body.primaryGoal,
+        onboarding_completed_at: body.onboardingCompleted ? now : null,
+        updated_at: now,
+      })
+      .select()
+      .single()
+
+    if (profileError) throw profileError
+
+    const { error: roleError } = await supabase.from('user_roles').upsert({
+      user_id: req.userId,
+      role: 'independente',
+      onboarding_completed: body.onboardingCompleted,
+      updated_at: now,
+    })
+    if (roleError) throw roleError
+
+    await supabase.from('onboarding_events').insert({
+      user_id: req.userId,
+      audience: 'independente',
+      event_name: body.onboardingCompleted ? 'student_onboarding_completed' : 'student_onboarding_saved',
+      metadata: {
+        primaryGoal: body.primaryGoal,
+        subjects: body.subjects,
+        dailyMinutes: body.dailyMinutes,
+        tutorPersona: body.tutorPersona,
+      },
+    })
+
+    const firstSubject = body.subjects[0] || 'geral'
+    const missionTitle = body.primaryGoal === 'prova'
+      ? `Prepare-se para sua próxima prova de ${firstSubject}`
+      : `Descubra seu próximo passo em ${firstSubject}`
+
+    const { data: existingPlan } = await supabase
+      .from('study_plans')
+      .select('id')
+      .eq('user_id', req.userId)
+      .eq('source', 'personal')
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle()
+
+    let studyPlanId = existingPlan?.id
+    if (!studyPlanId) {
+      const { data: plan, error: planError } = await supabase.from('study_plans').insert({
+        user_id: req.userId,
+        title: 'Meu primeiro plano MindSteps',
+        goal: body.primaryGoal,
+        subject: firstSubject,
+        source: 'personal',
+        status: 'active',
+        starts_at: now.slice(0, 10),
+        weekly_minutes: body.dailyMinutes * Math.max(body.preferredDays.length || 5, 1),
+        metadata: { generatedFrom: 'student-onboarding-v1' },
+      }).select().single()
+      if (planError) throw planError
+      studyPlanId = plan.id
+    }
+
+    const { data: existingMission } = await supabase
+      .from('learning_missions')
+      .select('id')
+      .eq('user_id', req.userId)
+      .eq('study_plan_id', studyPlanId)
+      .eq('status', 'pending')
+      .limit(1)
+      .maybeSingle()
+
+    let mission = existingMission
+    if (!existingMission) {
+      const { data: createdMission, error: missionError } = await supabase.from('learning_missions').insert({
+        user_id: req.userId,
+        study_plan_id: studyPlanId,
+        title: missionTitle,
+        description: 'Uma missão curta para entender o que você já sabe e montar o melhor caminho para você.',
+        subject: firstSubject,
+        estimated_minutes: Math.min(body.dailyMinutes, 15),
+        mission_type: 'diagnose',
+        visibility: 'private',
+        status: 'pending',
+        metadata: { generatedFrom: 'student-onboarding-v1' },
+      }).select().single()
+      if (missionError) throw missionError
+      mission = createdMission
+    }
+
+    res.json({ learningProfile, firstMission: mission })
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: error.errors[0]?.message || 'Dados inválidos' })
+    }
+    res.status(400).json({ message: error.message || 'Não foi possível salvar seu perfil de aprendizagem' })
   }
 })
 
